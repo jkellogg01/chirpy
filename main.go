@@ -97,9 +97,11 @@ func handleValidateChirp(w http.ResponseWriter, r *http.Request) {
 			"error": "Chirp is too long",
 		})
 	} else {
-		err = respondWithJSON(w, http.StatusOK, map[string]interface{}{
-			"valid": true,
-		})
+        badWords := []string{"kerfuffle", "sharbert", "fornax"}
+        clean := replaceWords(data.Body, "****", badWords)
+        err = respondWithJSON(w, http.StatusOK, map[string]interface{}{
+            "cleaned_body": clean,
+        })
 	}
 	if err != nil {
 		log.Print(err)
@@ -107,11 +109,11 @@ func handleValidateChirp(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func replaceWords(msg, clean string, replace ...string) string {
-	words := strings.Split(strings.ToLower(msg), " ")
+func replaceWords(msg, clean string, replace []string) string {
+	words := strings.Split(msg, " ")
 	for i, word := range words {
 		for _, bad := range replace {
-			if word == strings.ToLower(bad) {
+			if strings.ToLower(word) == strings.ToLower(bad) {
 				words[i] = clean
 			}
 		}
