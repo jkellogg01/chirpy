@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"html/template"
+	"log"
 	"net/http"
 )
 
@@ -27,6 +29,8 @@ func main() {
 		w.WriteHeader(200)
 		w.Write([]byte("OK"))
 	})
+
+    mux.HandleFunc("POST /api/validate_chirp", handleValidateChirp)
 
 	app := http.Server{
 		Addr:    ":8080",
@@ -74,4 +78,34 @@ func (cfg *apiConfig) handleGetMetrics(w http.ResponseWriter, r *http.Request) {
 func (cfg *apiConfig) handleResetMetrics(w http.ResponseWriter, r *http.Request) {
     cfg.fileServerHits = 0
     w.WriteHeader(http.StatusOK)
+}
+
+func handleValidateChirp(w http.ResponseWriter, r *http.Request) {
+    var data struct {
+        Body string `json:"body"`
+    }
+    decoder := json.NewDecoder(r.Body)
+    err := decoder.Decode(&data)
+    if err != nil {
+        log.Printf("Error decoding request body: %s", err)
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
+    resBody := make(map[string]interface{})
+    var status int
+    if len(data.Body) > 140 {
+        resBody["error"] = "Chirp is too long"
+        status = http.StatusBadRequest
+    } else {
+        resBody["valid"] = true
+        status = http.StatusOK
+    }
+    res, err := json.Marshal(resBody)
+    if err != nil {
+        log.Printf("Error encoding response body: %s", err)
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
+    w.WriteHeader(status)
+    w.Write(res)
 }
