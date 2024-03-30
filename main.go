@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"html/template"
 	"net/http"
 )
 
@@ -18,7 +18,7 @@ func main() {
 		),
 	)
 
-	mux.HandleFunc("GET /api/metrics", apiCfg.handleGetMetrics)
+	mux.HandleFunc("GET /admin/metrics", apiCfg.handleGetMetrics)
 
     mux.HandleFunc("/api/reset", apiCfg.handleResetMetrics)
 
@@ -60,9 +60,15 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 }
 
 func (cfg *apiConfig) handleGetMetrics(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+    tmpl, err := template.ParseGlob("*.html")
+    if err != nil {
+        w.WriteHeader(http.StatusInternalServerError)
+    }
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf("Hits: %d", cfg.fileServerHits)))
+    tmpl.ExecuteTemplate(w, "metrics.html", map[string]interface{}{
+        "Hits": cfg.fileServerHits,
+    })
 }
 
 func (cfg *apiConfig) handleResetMetrics(w http.ResponseWriter, r *http.Request) {
