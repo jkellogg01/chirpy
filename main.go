@@ -5,6 +5,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"strings"
 )
 
 func main() {
@@ -91,25 +92,6 @@ func handleValidateChirp(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	/*
-		resBody := make(map[string]interface{})
-		var status int
-		if len(data.Body) > 140 {
-			resBody["error"] = "Chirp is too long"
-			status = http.StatusBadRequest
-		} else {
-			resBody["valid"] = true
-			status = http.StatusOK
-		}
-		res, err := json.Marshal(resBody)
-		if err != nil {
-			log.Printf("Error encoding response body: %s", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(status)
-		w.Write(res)
-	*/
 	if len(data.Body) > 140 {
 		err = respondWithJSON(w, http.StatusBadRequest, map[string]interface{}{
 			"error": "Chirp is too long",
@@ -123,6 +105,18 @@ func handleValidateChirp(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 		w.WriteHeader(http.StatusInternalServerError)
 	}
+}
+
+func replaceWords(msg, clean string, replace ...string) string {
+	words := strings.Split(strings.ToLower(msg), " ")
+	for i, word := range words {
+		for _, bad := range replace {
+			if word == strings.ToLower(bad) {
+				words[i] = clean
+			}
+		}
+	}
+	return strings.Join(words, " ")
 }
 
 func respondWithJSON(w http.ResponseWriter, code int, payload map[string]interface{}) error {
