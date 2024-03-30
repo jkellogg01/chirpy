@@ -18,11 +18,11 @@ func main() {
 		),
 	)
 
-	mux.HandleFunc("GET /metrics", apiCfg.handleGetMetrics)
+	mux.HandleFunc("GET /api/metrics", apiCfg.handleGetMetrics)
 
-    mux.HandleFunc("/reset", apiCfg.handleResetMetrics)
+    mux.HandleFunc("/api/reset", apiCfg.handleResetMetrics)
 
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(200)
 		w.Write([]byte("OK"))
