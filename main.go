@@ -116,6 +116,7 @@ func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) 
 
 }
 
+/*
 func handleValidateChirp(w http.ResponseWriter, r *http.Request) {
 	var data struct {
 		Body string `json:"body"`
@@ -142,6 +143,19 @@ func handleValidateChirp(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 		w.WriteHeader(http.StatusInternalServerError)
 	}
+}
+*/
+
+func validateChirp(body string) (string, error) {
+    if len(body) > 140 {
+        return "", errors.New("body is too long")
+    }
+    result := replaceWords(body, "****", []string{
+        "kerfuffle",
+        "sharbert",
+        "fornax",
+    })
+    return result, nil
 }
 
 func replaceWords(msg, clean string, replace []string) string {
