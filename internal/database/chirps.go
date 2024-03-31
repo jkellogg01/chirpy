@@ -12,7 +12,7 @@ type Chirp struct {
 }
 
 func (db *DB) CreateChirp(body string) (Chirp, error) {
-	chirps, err := GetChirps()
+	chirps, err := db.GetChirps()
 	if err != nil {
 		return Chirp{}, err
 	}
@@ -27,11 +27,20 @@ func (db *DB) CreateChirp(body string) (Chirp, error) {
 	data := Data{
 		"chirps": chirps,
 	}
-	newDBState, err := json.Marshal(data)
-	if err != nil {
-		return newChirp, err
-	}
-	return newChirp, db.writeDB(newDBState)
+	return newChirp, db.writeDB(data)
 }
 
-func (db *DB) GetChirps() ([]Chirp, error)
+func (db *DB) GetChirps() ([]Chirp, error) {
+	data, err := db.readDB()
+	if err != nil {
+		return nil, err
+	}
+	jsonData := map[string][]Chirp{
+		"chirps": make([]Chirp, 0),
+	}
+	err = json.Unmarshal(data, &jsonData)
+	if err != nil {
+		return nil, err
+	}
+	return jsonData["chirps"], nil
+}
