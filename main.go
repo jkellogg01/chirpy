@@ -2,14 +2,30 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"html/template"
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/jkellogg01/chirpy/internal/database"
 )
 
+type apiConfig struct {
+	fileServerHits int
+	db             *database.DB
+}
+
 func main() {
-	apiCfg := new(apiConfig)
+	db, err := database.NewDB("./db.json")
+	if err != nil {
+		log.Printf("Failed to connect to DB: %s", err)
+	}
+	db.ClearDB()
+	apiCfg := &apiConfig{
+		db: db,
+	}
+
 	mux := http.NewServeMux()
 	corsMux := middlewareCors(mux)
 	mux.Handle(
@@ -31,7 +47,9 @@ func main() {
 		w.Write([]byte("OK"))
 	})
 
-	mux.HandleFunc("POST /api/validate_chirp", handleValidateChirp)
+	mux.HandleFunc("GET /api/chirps", apiCfg.handleGetChirps)
+
+	mux.HandleFunc("POST /api/chirps", apiCfg.handleCreateChirp)
 
 	app := http.Server{
 		Addr:    ":8080",
@@ -51,10 +69,6 @@ func middlewareCors(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
-}
-
-type apiConfig struct {
-	fileServerHits int
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
@@ -81,6 +95,27 @@ func (cfg *apiConfig) handleResetMetrics(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusOK)
 }
 
+func (cfg *apiConfig) handleGetChirps(w http.ResponseWriter, r *http.Request) {
+	chirps, err := cfg.db.GetChirps()
+	if errors.Is(err, database.ErrDBEmpty) {
+        log.Println("nothing to see here")
+        w.WriteHeader(http.StatusNoContent)
+        return
+	} else if err != nil {
+		log.Printf("failed to retrieve chirps from database: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	err = respondWithJSON(w, http.StatusOK, chirps)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+}
+
+func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) {
+
+}
+
 func handleValidateChirp(w http.ResponseWriter, r *http.Request) {
 	var data struct {
 		Body string `json:"body"`
@@ -97,11 +132,11 @@ func handleValidateChirp(w http.ResponseWriter, r *http.Request) {
 			"error": "Chirp is too long",
 		})
 	} else {
-        badWords := []string{"kerfuffle", "sharbert", "fornax"}
-        clean := replaceWords(data.Body, "****", badWords)
-        err = respondWithJSON(w, http.StatusOK, map[string]interface{}{
-            "cleaned_body": clean,
-        })
+		badWords := []string{"kerfuffle", "sharbert", "fornax"}
+		clean := replaceWords(data.Body, "****", badWords)
+		err = respondWithJSON(w, http.StatusOK, map[string]interface{}{
+			"cleaned_body": clean,
+		})
 	}
 	if err != nil {
 		log.Print(err)
@@ -121,7 +156,7 @@ func replaceWords(msg, clean string, replace []string) string {
 	return strings.Join(words, " ")
 }
 
-func respondWithJSON(w http.ResponseWriter, code int, payload map[string]interface{}) error {
+func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err

@@ -3,40 +3,47 @@ package database
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"log"
 	"os"
-	"strings"
 	"sync"
 )
 
 type DB struct {
-	file *os.File
+	path string
 	mu   *sync.RWMutex
 }
 
 type Data map[string]interface{}
 
+var (
+	ErrDBEmpty = errors.New("db is empty")
+)
+
 func NewDB(path string) (*DB, error) {
-	if !strings.HasSuffix(path, ".json") {
-		return nil, fmt.Errorf("got an invalid format for database file: %s", path)
-	}
-	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, os.ModePerm%0644)
+	file, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
-		log.Print("db does not exist, creating instead")
 		file, err = os.Create(path)
 		if err != nil {
-			log.Printf("failed to create db: %s", err)
 			return nil, err
 		}
 	} else if err != nil {
 		return nil, err
 	}
+	defer file.Close()
 	return &DB{
-		file: file,
+		path: path,
 		mu:   new(sync.RWMutex),
 	}, nil
+}
+
+func (db *DB) ClearDB() error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	file, err := os.Create(db.path)
+	if err != nil {
+		return err
+	}
+	return file.Close()
 }
 
 func (db *DB) writeDB(data Data) error {
@@ -46,28 +53,22 @@ func (db *DB) writeDB(data Data) error {
 	if err != nil {
 		return err
 	}
-	_, err = db.file.Write(newState)
+	file, err := os.Open(db.path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	_, err = file.Write(newState)
 	return err
 }
 
 func (db *DB) readDB() ([]byte, error) {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
-	return io.ReadAll(db.file)
-}
-
-func (db *DB) clearDB() error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	dbFilename := db.file.Name()
-	err := db.file.Close()
+	data, err := os.ReadFile(db.path)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	newDBFile, err := os.Create(dbFilename)
-	if err != nil {
-		return err
-	}
-	db.file = newDBFile
-	return nil
+	log.Printf("read %d bytes from db", len(data))
+	return data, nil
 }

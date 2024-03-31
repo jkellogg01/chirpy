@@ -3,6 +3,8 @@ package database
 import (
 	"cmp"
 	"encoding/json"
+	"errors"
+	"log"
 	"slices"
 )
 
@@ -13,7 +15,9 @@ type Chirp struct {
 
 func (db *DB) CreateChirp(body string) (Chirp, error) {
 	chirps, err := db.GetChirps()
-	if err != nil {
+	if errors.Is(err, ErrDBEmpty) {
+		log.Println("hey josh dont forget to handle the case in the create chirp method where the database is empty. love u bye")
+	} else if err != nil {
 		return Chirp{}, err
 	}
 	maxID := slices.MaxFunc(chirps, func(a, b Chirp) int {
@@ -34,6 +38,9 @@ func (db *DB) GetChirps() ([]Chirp, error) {
 	data, err := db.readDB()
 	if err != nil {
 		return nil, err
+	}
+	if len(data) == 0 {
+		return nil, ErrDBEmpty
 	}
 	jsonData := map[string][]Chirp{
 		"chirps": make([]Chirp, 0),
