@@ -17,7 +17,7 @@ type apiConfig struct {
 }
 
 func main() {
-	db, err := database.NewDB("./db.json")
+	db, err := database.NewDB("db.json")
 	if err != nil {
 		log.Printf("Failed to connect to DB: %s", err)
 	}
@@ -98,9 +98,9 @@ func (cfg *apiConfig) handleResetMetrics(w http.ResponseWriter, r *http.Request)
 func (cfg *apiConfig) handleGetChirps(w http.ResponseWriter, r *http.Request) {
 	chirps, err := cfg.db.GetChirps()
 	if errors.Is(err, database.ErrDBEmpty) {
-        log.Println("nothing to see here")
-        w.WriteHeader(http.StatusNoContent)
-        return
+		log.Println("nothing to see here")
+		w.WriteHeader(http.StatusNoContent)
+		return
 	} else if err != nil {
 		log.Printf("failed to retrieve chirps from database: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -113,7 +113,33 @@ func (cfg *apiConfig) handleGetChirps(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) {
-
+	decoder := json.NewDecoder(r.Body)
+	var body struct {
+		Body string `json:"body"`
+	}
+	err := decoder.Decode(&body)
+	if err != nil {
+		log.Printf("failed to decode request body: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	clean, err := validateChirp(body.Body)
+	if err != nil {
+		log.Printf("invalid chirp")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	chirp, err := cfg.db.CreateChirp(clean)
+	if err != nil {
+		log.Printf("failed to create chirp: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	err = respondWithJSON(w, http.StatusCreated, chirp)
+    if err != nil {
+        log.Printf("failed to respond: %s", err)
+        w.WriteHeader(http.StatusInternalServerError)
+    }
 }
 
 /*
@@ -147,15 +173,15 @@ func handleValidateChirp(w http.ResponseWriter, r *http.Request) {
 */
 
 func validateChirp(body string) (string, error) {
-    if len(body) > 140 {
-        return "", errors.New("body is too long")
-    }
-    result := replaceWords(body, "****", []string{
-        "kerfuffle",
-        "sharbert",
-        "fornax",
-    })
-    return result, nil
+	if len(body) > 140 {
+		return "", errors.New("body is too long")
+	}
+	result := replaceWords(body, "****", []string{
+		"kerfuffle",
+		"sharbert",
+		"fornax",
+	})
+	return result, nil
 }
 
 func replaceWords(msg, clean string, replace []string) string {

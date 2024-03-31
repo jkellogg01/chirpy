@@ -53,7 +53,7 @@ func (db *DB) writeDB(data Data) error {
 	if err != nil {
 		return err
 	}
-	file, err := os.Open(db.path)
+	file, err := os.Create(db.path)
 	if err != nil {
 		return err
 	}

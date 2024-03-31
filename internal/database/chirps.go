@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"encoding/json"
 	"errors"
-	"log"
 	"slices"
 )
 
@@ -16,15 +15,19 @@ type Chirp struct {
 func (db *DB) CreateChirp(body string) (Chirp, error) {
 	chirps, err := db.GetChirps()
 	if errors.Is(err, ErrDBEmpty) {
-		log.Println("hey josh dont forget to handle the case in the create chirp method where the database is empty. love u bye")
+		chirps = make([]Chirp, 0)
 	} else if err != nil {
 		return Chirp{}, err
 	}
-	maxID := slices.MaxFunc(chirps, func(a, b Chirp) int {
-		return cmp.Compare(a.Id, b.Id)
-	}).Id
+	nextId := 1
+	if len(chirps) > 0 {
+		maxID := slices.MaxFunc(chirps, func(a, b Chirp) int {
+			return cmp.Compare(a.Id, b.Id)
+		}).Id
+		nextId = maxID + 1
+	}
 	newChirp := Chirp{
-		Id:   maxID + 1,
+		Id:   nextId,
 		Body: body,
 	}
 	chirps = append(chirps, newChirp)
