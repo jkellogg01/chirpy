@@ -17,6 +17,7 @@ type Data map[string]interface{}
 
 var (
 	ErrDBEmpty = errors.New("db is empty")
+    ErrNotFound = errors.New("data not found")
 )
 
 func NewDB(path string) (*DB, error) {

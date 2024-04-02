@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/jkellogg01/chirpy/internal/database"
@@ -48,6 +49,8 @@ func main() {
 	})
 
 	mux.HandleFunc("GET /api/chirps", apiCfg.handleGetChirps)
+
+	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.handleGetChirp)
 
 	mux.HandleFunc("POST /api/chirps", apiCfg.handleCreateChirp)
 
@@ -136,41 +139,32 @@ func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	err = respondWithJSON(w, http.StatusCreated, chirp)
-    if err != nil {
-        log.Printf("failed to respond: %s", err)
-        w.WriteHeader(http.StatusInternalServerError)
-    }
+	if err != nil {
+		log.Printf("failed to respond: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+	}
 }
 
-/*
-func handleValidateChirp(w http.ResponseWriter, r *http.Request) {
-	var data struct {
-		Body string `json:"body"`
-	}
-	decoder := json.NewDecoder(r.Body)
-	err := decoder.Decode(&data)
+func (cfg *apiConfig) handleGetChirp(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("chirpID")
+	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		log.Printf("Error decoding request body: %s", err)
+		log.Printf("failed to convert provided id to integer: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+	data, err := cfg.db.GetChirp(id)
+	if err == database.ErrNotFound {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	} else if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	if len(data.Body) > 140 {
-		err = respondWithJSON(w, http.StatusBadRequest, map[string]interface{}{
-			"error": "Chirp is too long",
-		})
-	} else {
-		badWords := []string{"kerfuffle", "sharbert", "fornax"}
-		clean := replaceWords(data.Body, "****", badWords)
-		err = respondWithJSON(w, http.StatusOK, map[string]interface{}{
-			"cleaned_body": clean,
-		})
-	}
+	err = respondWithJSON(w, http.StatusOK, data)
 	if err != nil {
-		log.Print(err)
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 }
-*/
 
 func validateChirp(body string) (string, error) {
 	if len(body) > 140 {

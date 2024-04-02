@@ -37,6 +37,29 @@ func (db *DB) CreateChirp(body string) (Chirp, error) {
 	return newChirp, db.writeDB(data)
 }
 
+func (db *DB) GetChirp(id int) (Chirp, error) {
+	data, err := db.readDB()
+	if err != nil {
+		return Chirp{}, err
+	}
+	if len(data) == 0 {
+		return Chirp{}, ErrDBEmpty
+	}
+	jsonData := map[string][]Chirp{
+		"chirps": make([]Chirp, 0),
+	}
+	err = json.Unmarshal(data, &jsonData)
+	if err != nil {
+		return Chirp{}, err
+	}
+	for _, chirp := range jsonData["chirps"] {
+		if chirp.Id == id {
+			return chirp, nil
+		}
+	}
+	return Chirp{}, ErrNotFound
+}
+
 func (db *DB) GetChirps() ([]Chirp, error) {
 	data, err := db.readDB()
 	if err != nil {
