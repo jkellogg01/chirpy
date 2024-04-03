@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jkellogg01/chirpy/internal/database"
 )
@@ -28,7 +29,7 @@ func main() {
 		log.Printf("Failed to connect to DB: %s", err)
 	}
 	if *devMode {
-        log.Print("dev mode: clearing database")
+		log.Print("dev mode: clearing database")
 		db.ClearDB()
 	}
 	apiCfg := &apiConfig{
@@ -37,6 +38,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	corsMux := middlewareCors(mux)
+    logMux := middlewareLogging(corsMux)
 	mux.Handle(
 		"/app/*",
 		apiCfg.middlewareMetricsInc(
@@ -66,7 +68,7 @@ func main() {
 
 	app := http.Server{
 		Addr:    ":8080",
-		Handler: corsMux,
+		Handler: logMux,
 	}
 	app.ListenAndServe()
 }
@@ -88,6 +90,14 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cfg.fileServerHits += 1
 		next.ServeHTTP(w, r)
+	})
+}
+
+func middlewareLogging(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		next.ServeHTTP(w, r)
+		log.Printf("%5s | %10s | in %v", r.Method, r.URL.Path, time.Since(start))
 	})
 }
 
