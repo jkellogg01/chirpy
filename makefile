@@ -1,6 +1,9 @@
 BIN_DIR := bin
 TARGET := $(BIN_DIR)/chirpy
 
+dev: build
+	$(TARGET) --dev
+
 run: build
 	$(TARGET)
 

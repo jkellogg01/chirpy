@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"flag"
 	"html/template"
 	"io"
 	"log"
@@ -19,11 +20,17 @@ type apiConfig struct {
 }
 
 func main() {
+	devMode := flag.Bool("dev", false, "clear the database on startup")
+	flag.Parse()
+
 	db, err := database.NewDB("db.json")
 	if err != nil {
 		log.Printf("Failed to connect to DB: %s", err)
 	}
-	db.ClearDB()
+	if *devMode {
+        log.Print("dev mode: clearing database")
+		db.ClearDB()
+	}
 	apiCfg := &apiConfig{
 		db: db,
 	}
