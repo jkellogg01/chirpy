@@ -16,20 +16,21 @@ func (db *DB) CreateUser(email string) (User, error) {
 	if err != nil {
 		return User{}, err
 	}
-	jsonData := map[string][]User{
-		"users": make([]User, 0),
-	}
-	err = json.Unmarshal(data, jsonData)
-	if err != nil {
-		return User{}, err
-	}
-	users := jsonData["users"]
-	maxId := slices.MaxFunc(users, func(a, b User) int {
-		return cmp.Compare(a.Id, b.Id)
-	}).Id
-	newUser := User{
-		Id:    maxId + 1,
-		Email: email,
+	users := make([]User, 0)
+	newUser := User{Id: 1, Email: email}
+	if len(data) > 0 {
+		jsonData := map[string][]User{
+			"users": make([]User, 0),
+		}
+		err = json.Unmarshal(data, &jsonData)
+		if err != nil {
+			return User{}, err
+		}
+		users = jsonData["users"]
+		maxId := slices.MaxFunc(users, func(a, b User) int {
+			return cmp.Compare(a.Id, b.Id)
+		}).Id
+		newUser.Id = maxId + 1
 	}
 	users = append(users, newUser)
 	err = db.writeDB(Data{

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -53,6 +54,8 @@ func main() {
 	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.handleGetChirp)
 
 	mux.HandleFunc("POST /api/chirps", apiCfg.handleCreateChirp)
+
+	mux.HandleFunc("POST /api/users", apiCfg.handleCreateUser)
 
 	app := http.Server{
 		Addr:    ":8080",
@@ -188,6 +191,31 @@ func replaceWords(msg, clean string, replace []string) string {
 		}
 	}
 	return strings.Join(words, " ")
+}
+
+func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("Failed to read request body: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	var user struct {
+		Email string `json:"email"`
+	}
+	err = json.Unmarshal(body, &user)
+	if err != nil {
+		log.Printf("Failed to decode request body: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	newUser, err := cfg.db.CreateUser(user.Email)
+	if err != nil {
+		log.Printf("Failed to create user: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	respondWithJSON(w, http.StatusCreated, newUser)
 }
 
 func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) error {
