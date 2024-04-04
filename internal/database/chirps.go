@@ -29,10 +29,7 @@ func (db *DB) CreateChirp(chirp Chirp) (Chirp, error) {
 		newChirp.Id = 1
 	}
 	chirps = append(chirps, newChirp)
-	data := Data{
-		"chirps": chirps,
-	}
-	return newChirp, db.writeDB(data)
+	return newChirp, db.writeDB("chirps", chirps)
 }
 
 func (db *DB) GetChirp(id int) (Chirp, error) {

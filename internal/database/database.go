@@ -16,8 +16,8 @@ type DB struct {
 type Data map[string]interface{}
 
 var (
-	ErrDBEmpty = errors.New("db is empty")
-    ErrNotFound = errors.New("data not found")
+	ErrDBEmpty  = errors.New("db is empty")
+	ErrNotFound = errors.New("data not found")
 )
 
 func NewDB(path string) (*DB, error) {
@@ -47,10 +47,20 @@ func (db *DB) ClearDB() error {
 	return file.Close()
 }
 
-func (db *DB) writeDB(data Data) error {
+func (db *DB) writeDB(field string, data interface{}) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	newState, err := json.Marshal(data)
+	dbData, err := db.readDB()
+	if err != nil {
+		return err
+	}
+	oldState := make(Data)
+	err = json.Unmarshal(dbData, &oldState)
+	if err != nil {
+		return err
+	}
+	oldState[field] = data
+	newState, err := json.Marshal(oldState)
 	if err != nil {
 		return err
 	}

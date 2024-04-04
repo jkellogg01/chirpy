@@ -17,41 +17,27 @@ type User struct {
 }
 
 func (db *DB) CreateUser(user User) (User, error) {
-	data, err := db.readDB()
+	users, err := db.getUsers()
 	if err != nil {
 		return User{}, err
 	}
-	users := make([]User, 0)
-	newUser := user
-	if len(data) > 0 {
-		jsonData := map[string][]User{
-			"users": make([]User, 0),
-		}
-		err = json.Unmarshal(data, &jsonData)
-		if err != nil {
-			return User{}, err
-		}
-		users = jsonData["users"]
-		maxId := math.MinInt
-		for _, user := range users {
-			if user.Email == newUser.Email {
-				return User{}, ErrUserExist
-			}
-			if user.Id > maxId {
-				maxId = user.Id
-			}
-		}
+	if len(users) < 1 {
+		user.Id = 1
 	} else {
-		newUser.Id = 1
+		maxId := math.MinInt
+		for _, usr := range users {
+			if usr.Id > maxId {
+				maxId = usr.Id
+			}
+		}
+		user.Id = maxId + 1
 	}
-	users = append(users, newUser)
-	err = db.writeDB(Data{
-		"users": users,
-	})
+	users = append(users, user)
+	err = db.writeDB("users", users)
 	if err != nil {
 		return User{}, err
 	}
-	return newUser, nil
+	return user, nil
 }
 
 func (db *DB) GetUserByEmail(email string) (User, error) {
