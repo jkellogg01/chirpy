@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"html/template"
-	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jkellogg01/chirpy/internal/database"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type apiConfig struct {
@@ -38,7 +38,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	corsMux := middlewareCors(mux)
-    logMux := middlewareLogging(corsMux)
+	logMux := middlewareLogging(corsMux)
 	mux.Handle(
 		"/app/*",
 		apiCfg.middlewareMetricsInc(
@@ -137,22 +137,20 @@ func (cfg *apiConfig) handleGetChirps(w http.ResponseWriter, r *http.Request) {
 
 func (cfg *apiConfig) handleCreateChirp(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
-	var body struct {
-		Body string `json:"body"`
-	}
+	var body database.Chirp
 	err := decoder.Decode(&body)
 	if err != nil {
 		log.Printf("failed to decode request body: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	clean, err := validateChirp(body.Body)
+	body.Body, err = validateChirp(body.Body)
 	if err != nil {
 		log.Printf("invalid chirp")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	chirp, err := cfg.db.CreateChirp(clean)
+	chirp, err := cfg.db.CreateChirp(body)
 	if err != nil {
 		log.Printf("failed to create chirp: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -211,28 +209,29 @@ func replaceWords(msg, clean string, replace []string) string {
 }
 
 func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, r *http.Request) {
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		log.Printf("Failed to read request body: %s", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	var user struct {
-		Email string `json:"email"`
-	}
-	err = json.Unmarshal(body, &user)
+	decoder := json.NewDecoder(r.Body)
+	var body database.User
+	err := decoder.Decode(&body)
 	if err != nil {
 		log.Printf("Failed to decode request body: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	newUser, err := cfg.db.CreateUser(user.Email)
+	passEncrypt, err := bcrypt.GenerateFromPassword([]byte(body.Pass), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("Failed to encrypt password: %s", err)
+	}
+	body.Pass = string(passEncrypt)
+	newUser, err := cfg.db.CreateUser(body)
 	if err != nil {
 		log.Printf("Failed to create user: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	respondWithJSON(w, http.StatusCreated, newUser)
+	respondWithJSON(w, http.StatusCreated, map[string]any{
+		"id":    newUser.Id,
+		"email": newUser.Email,
+	})
 }
 
 func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) error {

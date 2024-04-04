@@ -12,23 +12,21 @@ type Chirp struct {
 	Body string `json:"body"`
 }
 
-func (db *DB) CreateChirp(body string) (Chirp, error) {
+func (db *DB) CreateChirp(chirp Chirp) (Chirp, error) {
 	chirps, err := db.GetChirps()
 	if errors.Is(err, ErrDBEmpty) {
 		chirps = make([]Chirp, 0)
 	} else if err != nil {
 		return Chirp{}, err
 	}
-	nextId := 1
+	newChirp := chirp
 	if len(chirps) > 0 {
 		maxID := slices.MaxFunc(chirps, func(a, b Chirp) int {
 			return cmp.Compare(a.Id, b.Id)
 		}).Id
-		nextId = maxID + 1
-	}
-	newChirp := Chirp{
-		Id:   nextId,
-		Body: body,
+		newChirp.Id = maxID + 1
+	} else {
+		newChirp.Id = 1
 	}
 	chirps = append(chirps, newChirp)
 	data := Data{
