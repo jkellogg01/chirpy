@@ -98,8 +98,9 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 func middlewareLogging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
+		log.Printf("%5s @ %s", r.Method, r.URL.Path)
 		next.ServeHTTP(w, r)
-		log.Printf("%5s | %10s | in %v", r.Method, r.URL.Path, time.Since(start))
+		log.Printf("finished in %v", time.Since(start))
 	})
 }
 
@@ -232,10 +233,13 @@ func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	respondWithJSON(w, http.StatusCreated, map[string]any{
+	err = respondWithJSON(w, http.StatusCreated, map[string]any{
 		"id":    newUser.Id,
 		"email": newUser.Email,
 	})
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
 }
 
 func (cfg *apiConfig) handleAuthenticateUser(w http.ResponseWriter, r *http.Request) {
@@ -249,6 +253,31 @@ func (cfg *apiConfig) handleAuthenticateUser(w http.ResponseWriter, r *http.Requ
 		log.Printf("Failed to decode request body: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
+	}
+	user, err := cfg.db.GetUserByEmail(body.Email)
+	switch err {
+	case nil:
+	case database.ErrNotFound:
+		log.Printf("User does not exist: %s", err)
+		w.WriteHeader(http.StatusNotFound)
+		return
+	default:
+		log.Printf("Failed to fetch user: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	err = bcrypt.CompareHashAndPassword([]byte(user.Pass), []byte(body.Pass))
+	if err != nil {
+		log.Printf("Unable to authenticate user: %s", err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	err = respondWithJSON(w, http.StatusOK, map[string]interface{}{
+		"id":    user.Id,
+		"email": user.Email,
+	})
+	if err != nil {
+		w.WriteHeader(500)
 	}
 }
 

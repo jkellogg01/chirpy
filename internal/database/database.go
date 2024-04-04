@@ -3,7 +3,6 @@ package database
 import (
 	"encoding/json"
 	"errors"
-	"log"
 	"os"
 	"sync"
 )
@@ -50,17 +49,7 @@ func (db *DB) ClearDB() error {
 func (db *DB) writeDB(field string, data interface{}) error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	dbData, err := db.readDB()
-	if err != nil {
-		return err
-	}
-	oldState := make(Data)
-	err = json.Unmarshal(dbData, &oldState)
-	if err != nil {
-		return err
-	}
-	oldState[field] = data
-	newState, err := json.Marshal(oldState)
+	dbData, err := os.ReadFile(db.path)
 	if err != nil {
 		return err
 	}
@@ -69,8 +58,28 @@ func (db *DB) writeDB(field string, data interface{}) error {
 		return err
 	}
 	defer file.Close()
-	_, err = file.Write(newState)
-	return err
+    if len(dbData) == 0 {
+        newState, err := json.Marshal(Data{
+            field: data,
+        })
+        if err != nil {
+            return err
+        }
+        _, err = file.Write(newState)
+        return err
+    }
+    oldState := make(Data)
+    err = json.Unmarshal(dbData, &oldState)
+    if err != nil {
+        return err
+    }
+    oldState[field] = data
+    newState, err := json.Marshal(oldState)
+    if err != nil {
+        return err
+    }
+    _, err = file.Write(newState)
+    return err
 }
 
 func (db *DB) readDB() ([]byte, error) {
@@ -80,6 +89,5 @@ func (db *DB) readDB() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("read %d bytes from db", len(data))
 	return data, nil
 }
