@@ -1,14 +1,13 @@
 package database
 
 import (
-	"cmp"
 	"encoding/json"
+	"errors"
 	"math"
-	"slices"
 )
 
 var (
-    ErrUserExist = errors.New("user already exists")
+	ErrUserExist = errors.New("user already exists")
 )
 
 type User struct {
@@ -33,15 +32,15 @@ func (db *DB) CreateUser(user User) (User, error) {
 			return User{}, err
 		}
 		users = jsonData["users"]
-        maxId := math.MinInt
-        for _, user := range users {
-            if user.Email == newUser.Email {
-                return User{}, ErrUserExist
-            }
-            if user.Id > maxId {
-                maxId = user.Id
-            }
-        }
+		maxId := math.MinInt
+		for _, user := range users {
+			if user.Email == newUser.Email {
+				return User{}, ErrUserExist
+			}
+			if user.Id > maxId {
+				maxId = user.Id
+			}
+		}
 	} else {
 		newUser.Id = 1
 	}
@@ -53,4 +52,38 @@ func (db *DB) CreateUser(user User) (User, error) {
 		return User{}, err
 	}
 	return newUser, nil
+}
+
+func (db *DB) GetUserByEmail(email string) (User, error) {
+	users, err := db.getUsers()
+	if err != nil {
+		return User{}, err
+	}
+	if len(users) == 0 {
+		return User{}, ErrNotFound
+	}
+	for _, user := range users {
+		if user.Email == email {
+			return user, nil
+		}
+	}
+	return User{}, ErrNotFound
+}
+
+func (db *DB) getUsers() ([]User, error) {
+	data, err := db.readDB()
+	if err != nil {
+		return nil, err
+	}
+	if len(data) == 0 {
+		return []User{}, nil
+	}
+	var result struct {
+		Users []User `json:"users"`
+	}
+	err = json.Unmarshal(data, &result)
+	if err != nil {
+		return nil, err
+	}
+	return result.Users, nil
 }

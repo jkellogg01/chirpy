@@ -66,6 +66,8 @@ func main() {
 
 	mux.HandleFunc("POST /api/users", apiCfg.handleCreateUser)
 
+	mux.HandleFunc("POST /api/login", apiCfg.handleAuthenticateUser)
+
 	app := http.Server{
 		Addr:    ":8080",
 		Handler: logMux,
@@ -220,6 +222,8 @@ func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	passEncrypt, err := bcrypt.GenerateFromPassword([]byte(body.Pass), bcrypt.DefaultCost)
 	if err != nil {
 		log.Printf("Failed to encrypt password: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 	body.Pass = string(passEncrypt)
 	newUser, err := cfg.db.CreateUser(body)
@@ -232,6 +236,20 @@ func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		"id":    newUser.Id,
 		"email": newUser.Email,
 	})
+}
+
+func (cfg *apiConfig) handleAuthenticateUser(w http.ResponseWriter, r *http.Request) {
+	decoder := json.NewDecoder(r.Body)
+	var body struct {
+		Email string `json:"email"`
+		Pass  string `json:"password"`
+	}
+	err := decoder.Decode(&body)
+	if err != nil {
+		log.Printf("Failed to decode request body: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 }
 
 func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) error {
