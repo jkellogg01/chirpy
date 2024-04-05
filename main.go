@@ -310,24 +310,51 @@ func (cfg *apiConfig) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token, err := jwt.ParseWithClaims(
-        tokenString,
-        jwt.RegisteredClaims{},
-        func(token *jwt.Token) (interface{}, error) {
-            return cfg.jwtSecret, nil
-    })
-    if err != nil {
-        log.Printf("jwt invalid or expired: %s", err)
-        w.WriteHeader(http.StatusUnauthorized)
-        return
-    }
-    strUserID, _ := token.Claims.GetSubject()
-    userId, err := strconv.Atoi(strUserID)
-    if err != nil {
-        log.Printf("failed to fetch user id: %s", err)
-        w.WriteHeader(http.StatusInternalServerError)
-        return
-    }
-    // now to handle updating the user in the db package
+		tokenString,
+		jwt.RegisteredClaims{},
+		func(token *jwt.Token) (interface{}, error) {
+			return cfg.jwtSecret, nil
+		})
+	if err != nil {
+		log.Printf("jwt invalid or expired: %s", err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	strUserID, _ := token.Claims.GetSubject()
+	userId, err := strconv.Atoi(strUserID)
+	if err != nil {
+		log.Printf("failed to fetch user id: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	var body struct {
+		Email string `json:"email"`
+		Pass  string `json:"password"`
+	}
+	decoder := json.NewDecoder(r.Body)
+	err = decoder.Decode(&body)
+	if err != nil {
+		log.Printf("failed to decode request body: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	user, err := cfg.db.UpdateUser(database.User{
+		Id:    userId,
+		Email: body.Email,
+		Pass:  body.Pass,
+	})
+	if err != nil {
+		log.Printf("failed to update user: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	err = respondWithJSON(w, http.StatusOK, map[string]interface{}{
+		"email": user.Email,
+		"id":    user.Id,
+	})
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
 }
 
 func (cfg *apiConfig) generateToken(id int, exp time.Duration) (string, error) {
