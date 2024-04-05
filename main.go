@@ -7,20 +7,24 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/jkellogg01/chirpy/internal/database"
+	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type apiConfig struct {
 	fileServerHits int
 	db             *database.DB
+	jwtSecret      string
 }
 
 func main() {
+	godotenv.Load()
 	devMode := flag.Bool("dev", false, "clear the database on startup")
 	flag.Parse()
 
@@ -33,7 +37,9 @@ func main() {
 		db.ClearDB()
 	}
 	apiCfg := &apiConfig{
-		db: db,
+		fileServerHits: 0,
+		db:             db,
+		jwtSecret:      os.Getenv("JWT_SECRET"),
 	}
 
 	mux := http.NewServeMux()
