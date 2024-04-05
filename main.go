@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -80,6 +81,8 @@ func main() {
 
 	mux.HandleFunc("POST /api/login", apiCfg.handleAuthenticateUser)
 
+	mux.HandleFunc("PUT /api/users", apiCfg.handleUpdateUser)
+
 	app := http.Server{
 		Addr:    ":8080",
 		Handler: logMux,
@@ -110,7 +113,7 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 func middlewareLogging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		log.Printf("%5s @ %s", r.Method, r.URL.Path)
+		log.Printf("%7s @ %s", r.Method, r.URL.Path)
 		next.ServeHTTP(w, r)
 		log.Printf("finished in %v", time.Since(start))
 	})
@@ -285,16 +288,22 @@ func (cfg *apiConfig) handleAuthenticateUser(w http.ResponseWriter, r *http.Requ
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	token, err := cfg.generateToken(user.Id, time.Second*time.Duration(body.Expire))
+	expTime := time.Duration(body.Expire) * time.Second
+    if body.Expire == 0 {
+        expTime = time.Hour * 24
+    }
+	token := generateToken(user.Id, expTime)
+	tokenString, err := token.SignedString(cfg.jwtSecret)
 	if err != nil {
-		log.Printf("Failed to generate jwt: %s", err)
+		log.Printf("Failed to sign jwt: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+    log.Printf("responding with token string: %s", tokenString)
 	err = respondWithJSON(w, http.StatusOK, map[string]interface{}{
 		"id":    user.Id,
 		"email": user.Email,
-		"token": token,
+		"token": tokenString,
 	})
 	if err != nil {
 		w.WriteHeader(500)
@@ -303,21 +312,38 @@ func (cfg *apiConfig) handleAuthenticateUser(w http.ResponseWriter, r *http.Requ
 
 func (cfg *apiConfig) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	AuthHeader := r.Header.Get("Authorization")
-	prefix, tokenString, split := strings.Cut(AuthHeader, " ")
-	if !split || prefix != "Bearer" {
+	log.Printf("auth header: %s", AuthHeader)
+	tokenString, split := strings.CutPrefix(AuthHeader, "Bearer ")
+	if !split {
 		log.Print("malformed authorization header")
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	token, err := jwt.ParseWithClaims(
+	token, err := jwt.Parse(
 		tokenString,
-		jwt.RegisteredClaims{},
 		func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+			}
 			return cfg.jwtSecret, nil
-		})
-	if err != nil {
-		log.Printf("jwt invalid or expired: %s", err)
+		},
+	)
+	switch {
+	case errors.Is(err, jwt.ErrTokenExpired) || errors.Is(err, jwt.ErrTokenNotValidYet):
+		log.Printf("timing is everything: %s", err)
 		w.WriteHeader(http.StatusUnauthorized)
+		return
+	case errors.Is(err, jwt.ErrTokenMalformed):
+		log.Print("token is malformed")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	case errors.Is(err, jwt.ErrTokenSignatureInvalid):
+		log.Printf("token signature is invalid: %s", err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	case err != nil:
+		log.Printf("something else entirely")
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	strUserID, _ := token.Claims.GetSubject()
@@ -338,10 +364,16 @@ func (cfg *apiConfig) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	passEncrypted, err := bcrypt.GenerateFromPassword([]byte(body.Pass), bcrypt.DefaultCost)
+	if err != nil {
+		log.Printf("failed to encrypt password: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	user, err := cfg.db.UpdateUser(database.User{
 		Id:    userId,
 		Email: body.Email,
-		Pass:  body.Pass,
+		Pass:  string(passEncrypted),
 	})
 	if err != nil {
 		log.Printf("failed to update user: %s", err)
@@ -357,7 +389,7 @@ func (cfg *apiConfig) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (cfg *apiConfig) generateToken(id int, exp time.Duration) (string, error) {
+func generateToken(id int, exp time.Duration) *jwt.Token {
 	if exp > 24*time.Hour {
 		exp = 24 * time.Hour
 	}
@@ -365,13 +397,13 @@ func (cfg *apiConfig) generateToken(id int, exp time.Duration) (string, error) {
 	issueTime := jwt.NewNumericDate(nowUTC)
 	expireTime := jwt.NewNumericDate(nowUTC.Add(exp))
 	strid := strconv.Itoa(id)
-	tokenString := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
 		Issuer:    "chirpy",
 		IssuedAt:  issueTime,
 		ExpiresAt: expireTime,
 		Subject:   strid,
 	})
-	return tokenString.SignedString(cfg.jwtSecret)
+	return token
 }
 
 func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) error {
