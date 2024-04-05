@@ -56,6 +56,22 @@ func (db *DB) GetUserByEmail(email string) (User, error) {
 	return User{}, ErrNotFound
 }
 
+func (db *DB) GetUser(id int) (User, error) {
+    users, err := db.getUsers()
+    if err != nil {
+        return User{}, err
+    }
+    if len(users) == 0 {
+        return User{}, ErrNotFound
+    }
+    for _, user := range users {
+        if user.Id == id {
+            return user, nil
+        }
+    }
+    return User{}, ErrNotFound
+}
+
 func (db *DB) getUsers() ([]User, error) {
 	data, err := db.readDB()
 	if err != nil {

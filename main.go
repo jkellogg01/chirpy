@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/jkellogg01/chirpy/internal/database"
 	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
@@ -20,7 +22,7 @@ import (
 type apiConfig struct {
 	fileServerHits int
 	db             *database.DB
-	jwtSecret      string
+	jwtSecret      []byte
 }
 
 func main() {
@@ -32,6 +34,10 @@ func main() {
 	if err != nil {
 		log.Printf("Failed to connect to DB: %s", err)
 	}
+	secret, err := base64.RawStdEncoding.DecodeString(os.Getenv("JWT_SECRET"))
+	if err != nil {
+		log.Fatalf("Failed to decode JWT secret: %s", err)
+	}
 	if *devMode {
 		log.Print("dev mode: clearing database")
 		db.ClearDB()
@@ -39,7 +45,7 @@ func main() {
 	apiCfg := &apiConfig{
 		fileServerHits: 0,
 		db:             db,
-		jwtSecret:      os.Getenv("JWT_SECRET"),
+		jwtSecret:      secret,
 	}
 
 	mux := http.NewServeMux()
@@ -251,8 +257,9 @@ func (cfg *apiConfig) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 func (cfg *apiConfig) handleAuthenticateUser(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	var body struct {
-		Email string `json:"email"`
-		Pass  string `json:"password"`
+		Email  string `json:"email"`
+		Pass   string `json:"password"`
+		Expire int    `json:"expires_in_seconds"`
 	}
 	err := decoder.Decode(&body)
 	if err != nil {
@@ -278,13 +285,66 @@ func (cfg *apiConfig) handleAuthenticateUser(w http.ResponseWriter, r *http.Requ
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
+	token, err := cfg.generateToken(user.Id, time.Second*time.Duration(body.Expire))
+	if err != nil {
+		log.Printf("Failed to generate jwt: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	err = respondWithJSON(w, http.StatusOK, map[string]interface{}{
 		"id":    user.Id,
 		"email": user.Email,
+		"token": token,
 	})
 	if err != nil {
 		w.WriteHeader(500)
 	}
+}
+
+func (cfg *apiConfig) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
+	AuthHeader := r.Header.Get("Authorization")
+	prefix, tokenString, split := strings.Cut(AuthHeader, " ")
+	if !split || prefix != "Bearer" {
+		log.Print("malformed authorization header")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	token, err := jwt.ParseWithClaims(
+        tokenString,
+        jwt.RegisteredClaims{},
+        func(token *jwt.Token) (interface{}, error) {
+            return cfg.jwtSecret, nil
+    })
+    if err != nil {
+        log.Printf("jwt invalid or expired: %s", err)
+        w.WriteHeader(http.StatusUnauthorized)
+        return
+    }
+    strUserID, _ := token.Claims.GetSubject()
+    userId, err := strconv.Atoi(strUserID)
+    if err != nil {
+        log.Printf("failed to fetch user id: %s", err)
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
+    // now to handle updating the user in the db package
+}
+
+func (cfg *apiConfig) generateToken(id int, exp time.Duration) (string, error) {
+	if exp > 24*time.Hour {
+		exp = 24 * time.Hour
+	}
+	nowUTC := time.Now().UTC()
+	issueTime := jwt.NewNumericDate(nowUTC)
+	expireTime := jwt.NewNumericDate(nowUTC.Add(exp))
+	strid := strconv.Itoa(id)
+	tokenString := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
+		Issuer:    "chirpy",
+		IssuedAt:  issueTime,
+		ExpiresAt: expireTime,
+		Subject:   strid,
+	})
+	return tokenString.SignedString(cfg.jwtSecret)
 }
 
 func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) error {
