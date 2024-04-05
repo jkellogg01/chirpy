@@ -16,6 +16,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jkellogg01/chirpy/internal/database"
+	"github.com/jkellogg01/chirpy/internal/middleware"
 	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -44,26 +45,27 @@ func main() {
 		db.ClearDB()
 	}
 	apiCfg := &apiConfig{
-		fileServerHits: 0,
 		db:             db,
 		jwtSecret:      secret,
 	}
+
+    metrics := &middleware.ApiMetrics{}
 
 	mux := http.NewServeMux()
 	corsMux := middlewareCors(mux)
 	logMux := middlewareLogging(corsMux)
 	mux.Handle(
 		"/app/*",
-		apiCfg.middlewareMetricsInc(
+		metrics.MiddlewareMetricsInc(
 			http.StripPrefix(
 				"/app",
 				http.FileServer(http.Dir("."))),
 		),
 	)
 
-	mux.HandleFunc("GET /admin/metrics", apiCfg.handleGetMetrics)
+	mux.HandleFunc("GET /admin/metrics", metrics.HandleGetMetrics)
 
-	mux.HandleFunc("/api/reset", apiCfg.handleResetMetrics)
+	mux.HandleFunc("/api/reset", metrics.HandleResetMetrics)
 
 	mux.HandleFunc("GET /api/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -103,13 +105,6 @@ func middlewareCors(next http.Handler) http.Handler {
 	})
 }
 
-func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cfg.fileServerHits += 1
-		next.ServeHTTP(w, r)
-	})
-}
-
 func middlewareLogging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -117,23 +112,6 @@ func middlewareLogging(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 		log.Printf("finished in %v", time.Since(start))
 	})
-}
-
-func (cfg *apiConfig) handleGetMetrics(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	tmpl, err := template.ParseGlob("*.html")
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-	}
-	w.WriteHeader(http.StatusOK)
-	tmpl.ExecuteTemplate(w, "metrics.html", map[string]interface{}{
-		"Hits": cfg.fileServerHits,
-	})
-}
-
-func (cfg *apiConfig) handleResetMetrics(w http.ResponseWriter, r *http.Request) {
-	cfg.fileServerHits = 0
-	w.WriteHeader(http.StatusOK)
 }
 
 func (cfg *apiConfig) handleGetChirps(w http.ResponseWriter, r *http.Request) {
@@ -289,9 +267,9 @@ func (cfg *apiConfig) handleAuthenticateUser(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	expTime := time.Duration(body.Expire) * time.Second
-    if body.Expire == 0 {
-        expTime = time.Hour * 24
-    }
+	if body.Expire == 0 {
+		expTime = time.Hour * 24
+	}
 	token := generateToken(user.Id, expTime)
 	tokenString, err := token.SignedString(cfg.jwtSecret)
 	if err != nil {
@@ -299,7 +277,7 @@ func (cfg *apiConfig) handleAuthenticateUser(w http.ResponseWriter, r *http.Requ
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-    log.Printf("responding with token string: %s", tokenString)
+	log.Printf("responding with token string: %s", tokenString)
 	err = respondWithJSON(w, http.StatusOK, map[string]interface{}{
 		"id":    user.Id,
 		"email": user.Email,
@@ -396,12 +374,11 @@ func generateToken(id int, exp time.Duration) *jwt.Token {
 	nowUTC := time.Now().UTC()
 	issueTime := jwt.NewNumericDate(nowUTC)
 	expireTime := jwt.NewNumericDate(nowUTC.Add(exp))
-	strid := strconv.Itoa(id)
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
 		Issuer:    "chirpy",
 		IssuedAt:  issueTime,
 		ExpiresAt: expireTime,
-		Subject:   strid,
+		Subject:   strconv.Itoa(id),
 	})
 	return token
 }
