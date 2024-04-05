@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"html/template"
 	"log"
 	"net/http"
 	"os"
@@ -52,8 +51,8 @@ func main() {
     metrics := &middleware.ApiMetrics{}
 
 	mux := http.NewServeMux()
-	corsMux := middlewareCors(mux)
-	logMux := middlewareLogging(corsMux)
+	corsMux := middleware.MiddlewareCors(mux)
+	logMux := middleware.MiddlewareLogging(corsMux)
 	mux.Handle(
 		"/app/*",
 		metrics.MiddlewareMetricsInc(
@@ -90,28 +89,6 @@ func main() {
 		Handler: logMux,
 	}
 	app.ListenAndServe()
-}
-
-func middlewareCors(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
-		w.Header().Set("Access-Control-Allow-Headers", "*")
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-func middlewareLogging(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		log.Printf("%7s @ %s", r.Method, r.URL.Path)
-		next.ServeHTTP(w, r)
-		log.Printf("finished in %v", time.Since(start))
-	})
 }
 
 func (cfg *apiConfig) handleGetChirps(w http.ResponseWriter, r *http.Request) {
