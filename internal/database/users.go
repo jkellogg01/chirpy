@@ -72,6 +72,29 @@ func (db *DB) GetUser(id int) (User, error) {
     return User{}, ErrNotFound
 }
 
+func (db *DB) UpdateUser(newUser User) (User, error) {
+    if newUser.Email == "" || newUser.Pass == "" {
+        return User{}, errors.New("fill all fields to update user")
+    }
+    users, err := db.getUsers()
+    if err != nil {
+        return User{}, err
+    }
+    if len(users) == 0 {
+        return User{}, ErrNotFound
+    }
+    for i, user := range users {
+        if user.Id != newUser.Id {
+            continue
+        }
+        users[i] = newUser
+        err = db.writeDB("users", users)
+        return newUser, err
+    }
+    return User{}, ErrNotFound
+}
+
+
 func (db *DB) getUsers() ([]User, error) {
 	data, err := db.readDB()
 	if err != nil {
