@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"encoding/base64"
+	"encoding/json"
+	"net/http"
 
 	"github.com/jkellogg01/chirpy/internal/database"
 )
@@ -24,4 +26,14 @@ func NewApiState(secret, dbPath string) (*ApiState, error) {
 		db:        db,
 		jwtSecret: jwtSecret,
 	}, nil
+}
+
+func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) error {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	w.WriteHeader(code)
+	w.Write(body)
+	return nil
 }
