@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/jkellogg01/chirpy/internal/database"
@@ -27,6 +28,26 @@ func (a *ApiState) GetChirps(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log.Printf("failed to respond: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+}
+func (a *ApiState) GetChirp(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("chirpID")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		log.Printf("failed to convert provided id to integer: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+	data, err := a.db.GetChirp(id)
+	if err == database.ErrNotFound {
+		w.WriteHeader(http.StatusNotFound)
+		return
+	} else if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	err = respondWithJSON(w, http.StatusOK, data)
+	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 }
