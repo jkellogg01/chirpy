@@ -3,9 +3,7 @@ package handlers
 import (
 	"encoding/base64"
 	"encoding/json"
-	"log"
 	"net/http"
-	"os"
 
 	"github.com/jkellogg01/chirpy/internal/database"
 )

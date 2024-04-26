@@ -46,12 +46,12 @@ func (a *ApiState) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// api/login
 func (a *ApiState) AuthenticateUser(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	var body struct {
 		Email  string `json:"email"`
 		Pass   string `json:"password"`
-		Expire int    `json:"expires_in_seconds"`
 	}
 	err := decoder.Decode(&body)
 	if err != nil {
@@ -77,22 +77,26 @@ func (a *ApiState) AuthenticateUser(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	expTime := time.Duration(body.Expire) * time.Second
-	if body.Expire == 0 {
-		expTime = time.Hour * 24
-	}
-	token := generateToken(user.Id, expTime)
-	tokenString, err := token.SignedString(a.jwtSecret)
+	accessToken := generateAccessToken(user.Id)
+    refreshToken := generateRefreshToken(user.Id)
+	accessTokenString, err := accessToken.SignedString(a.jwtSecret)
 	if err != nil {
 		log.Printf("Failed to sign jwt: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	log.Printf("responding with token string: %s", tokenString)
+    refreshTokenString, err := refreshToken.SignedString(a.jwtSecret)
+    if err != nil {
+        log.Printf("Failed to sign jwt (refresh): %s", err)
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
+	log.Printf("responding with token string: %s", accessTokenString)
 	err = respondWithJSON(w, http.StatusOK, map[string]interface{}{
 		"id":    user.Id,
 		"email": user.Email,
-		"token": tokenString,
+		"token": accessTokenString,
+        "refresh_token": refreshTokenString,
 	})
 	if err != nil {
 		w.WriteHeader(500)
@@ -101,22 +105,7 @@ func (a *ApiState) AuthenticateUser(w http.ResponseWriter, r *http.Request) {
 
 func (a *ApiState) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	AuthHeader := r.Header.Get("Authorization")
-	log.Printf("auth header: %s", AuthHeader)
-	tokenString, split := strings.CutPrefix(AuthHeader, "Bearer ")
-	if !split {
-		log.Print("malformed authorization header")
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	token, err := jwt.Parse(
-		tokenString,
-		func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
-			}
-			return a.jwtSecret, nil
-		},
-	)
+	token, err := a.validateAccessToken(AuthHeader)
 	switch {
 	case errors.Is(err, jwt.ErrTokenExpired) || errors.Is(err, jwt.ErrTokenNotValidYet):
 		log.Printf("timing is everything: %s", err)
@@ -178,18 +167,77 @@ func (a *ApiState) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func generateToken(id int, exp time.Duration) *jwt.Token {
-	if exp > 24*time.Hour {
-		exp = 24 * time.Hour
-	}
+func generateAccessToken(id int) *jwt.Token {
+	exp := 1 * time.Hour
 	nowUTC := time.Now().UTC()
 	issueTime := jwt.NewNumericDate(nowUTC)
 	expireTime := jwt.NewNumericDate(nowUTC.Add(exp))
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
-		Issuer:    "chirpy",
+		Issuer:    "chirpy-access",
 		IssuedAt:  issueTime,
 		ExpiresAt: expireTime,
 		Subject:   strconv.Itoa(id),
 	})
 	return token
+}
+
+func (a *ApiState) validateAccessToken(authHeader string) (*jwt.Token, error) {
+	tokenString, split := strings.CutPrefix(authHeader, "Bearer ")
+	if !split {
+		return nil, errors.New("malformed authorization header")
+	}
+	token, err := jwt.Parse(
+		tokenString,
+		func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+			}
+			return a.jwtSecret, nil
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	i, err := token.Claims.GetIssuer()
+	if err != nil {
+		return nil, err
+	}
+	if i != "chirpy-access" {
+		return nil, errors.New("this is not a chirpy access token")
+	}
+	return token, nil
+}
+
+func generateRefreshToken(id int) *jwt.Token {
+	exp := 60 * 24 * time.Hour
+	nowUTC := time.Now().UTC()
+	issueTime := jwt.NewNumericDate(nowUTC)
+	expireTime := jwt.NewNumericDate(nowUTC.Add(exp))
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
+		Issuer:    "chirpy-refresh",
+		IssuedAt:  issueTime,
+		ExpiresAt: expireTime,
+		Subject:   strconv.Itoa(id),
+	})
+	return token
+}
+
+func (a *ApiState) validateRefreshToken(authHeader string) (*jwt.Token, error) {
+	tokenString, split := strings.CutPrefix(authHeader, "Bearer ")
+	if !split {
+		return nil, errors.New("malformed authorization header")
+	}
+	token, err := jwt.Parse(
+		tokenString,
+		func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+			}
+			return a.jwtSecret, nil
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	return token, nil
 }
