@@ -65,6 +65,8 @@ func main() {
     
     mux.HandleFunc("POST /api/refresh", apiCfg.RefreshUser)
 
+    mux.HandleFunc("POST /api/revoke", apiCfg.RevokeToken)
+
 	app := http.Server{
 		Addr:    ":8080",
 		Handler: logMux,

@@ -227,6 +227,46 @@ func (a *ApiState) RefreshUser(w http.ResponseWriter, r *http.Request) {
     }
 }
 
+func (a *ApiState) RevokeToken(w http.ResponseWriter, r *http.Request) {
+    authHeader := r.Header.Get("Authorization")
+    _, err := a.validateRefreshToken(authHeader)
+	switch {
+	case errors.Is(err, jwt.ErrTokenExpired) || errors.Is(err, jwt.ErrTokenNotValidYet):
+		log.Printf("timing is everything: %s", err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	case errors.Is(err, jwt.ErrTokenMalformed):
+		log.Print("token is malformed")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	case errors.Is(err, jwt.ErrTokenSignatureInvalid):
+		log.Printf("token signature is invalid: %s", err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+    case errors.Is(err, ErrIssuerInvalid):
+        log.Print("invalid token issuer")
+        w.WriteHeader(http.StatusUnauthorized)
+        return
+    case errors.Is(err, ErrTokenRevoked):
+        log.Print(err)
+        w.WriteHeader(http.StatusUnauthorized)
+        return
+	case err != nil:
+        log.Printf("something else entirely: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	tokenString, _ := strings.CutPrefix(authHeader, "Bearer ")
+    revoked, err := a.db.Revoke(tokenString)
+    if err != nil {
+        log.Printf("failed to revoke token: %s", err)
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
+    log.Printf("token revoked at %v", revoked.RevokedAt)
+    w.WriteHeader(http.StatusOK)
+}
+
 var (
     ErrMalformedAuthHeader = errors.New("malformed authorization header") 
     ErrTokenRevoked = errors.New("this token has been revoked")
