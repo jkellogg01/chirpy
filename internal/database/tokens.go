@@ -24,6 +24,19 @@ func (db *DB) Revoke(token string) (RevokedToken, error) {
     return toRevoke, nil
 }
 
+func (db *DB) IsRevoked(token string) (bool, error) {
+    revoked, err := db.GetRevokedTokens()
+    if err != nil {
+        return false, err
+    }
+    for _, tkn := range revoked {
+        if tkn.Id == token {
+            return true, nil
+        }
+    }
+    return false, nil
+}
+
 func (db *DB) GetRevokedTokens() ([]RevokedToken, error) {
 	data, err := db.readDB()
 	if err != nil {
