@@ -104,8 +104,8 @@ func (a *ApiState) AuthenticateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *ApiState) UpdateUser(w http.ResponseWriter, r *http.Request) {
-	AuthHeader := r.Header.Get("Authorization")
-	token, err := a.validateAccessToken(AuthHeader)
+	authHeader := r.Header.Get("Authorization")
+	token, err := a.validateAccessToken(authHeader)
 	switch {
 	case errors.Is(err, jwt.ErrTokenExpired) || errors.Is(err, jwt.ErrTokenNotValidYet):
 		log.Printf("timing is everything: %s", err)
@@ -171,8 +171,59 @@ func (a *ApiState) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (a *ApiState) RefreshUser(w http.ResponseWriter, r *http.Request) {
+    authHeader := r.Header.Get("Authorization")
+    token, err := a.validateRefreshToken(authHeader)
+	switch {
+	case errors.Is(err, jwt.ErrTokenExpired) || errors.Is(err, jwt.ErrTokenNotValidYet):
+		log.Printf("timing is everything: %s", err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	case errors.Is(err, jwt.ErrTokenMalformed):
+		log.Print("token is malformed")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	case errors.Is(err, jwt.ErrTokenSignatureInvalid):
+		log.Printf("token signature is invalid: %s", err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+    case errors.Is(err, ErrIssuerInvalid):
+        log.Print("invalid token issuer")
+        w.WriteHeader(http.StatusUnauthorized)
+        return
+    case errors.Is(err, ErrTokenRevoked):
+        log.Print(err)
+        w.WriteHeader(http.StatusUnauthorized)
+        return
+	case err != nil:
+        log.Printf("something else entirely: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+    userID, err := token.Claims.GetSubject()
+    if err != nil {
+        log.Printf("failed to fetch jwt subject: %s", err)
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
+    idstr, err := strconv.Atoi(userID)
+    if err != nil {
+        log.Printf("failed to convert user id to int: %s", err)
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
+    refreshedToken := generateRefreshToken(idstr)
+    err = respondWithJSON(w, http.StatusOK, map[string]any{
+        "token": refreshedToken,
+    })
+    if err != nil {
+        w.WriteHeader(http.StatusInternalServerError)
+    }
+}
+
 var (
     ErrMalformedAuthHeader = errors.New("malformed authorization header") 
+    ErrTokenRevoked = errors.New("this token has been revoked")
     ErrIssuerInvalid = errors.New("this is not a chirpy access token")
 )
 
@@ -236,6 +287,9 @@ func (a *ApiState) validateRefreshToken(authHeader string) (*jwt.Token, error) {
 	if !split {
 		return nil, errors.New("malformed authorization header")
 	}
+    if r, _ := a.db.IsRevoked(tokenString); r {
+        return nil, ErrTokenRevoked
+    }
 	token, err := jwt.Parse(
 		tokenString,
 		func(token *jwt.Token) (interface{}, error) {
@@ -247,6 +301,13 @@ func (a *ApiState) validateRefreshToken(authHeader string) (*jwt.Token, error) {
 	)
 	if err != nil {
 		return nil, err
+	}
+	i, err := token.Claims.GetIssuer()
+	if err != nil {
+		return nil, err
+	}
+	if i != "chirpy-refresh" {
+		return nil, ErrIssuerInvalid
 	}
 	return token, nil
 }
