@@ -112,7 +112,7 @@ func (a *ApiState) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	case errors.Is(err, jwt.ErrTokenMalformed):
-		log.Print("token is malformed")
+        log.Printf("token is malformed: %s", err)
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	case errors.Is(err, jwt.ErrTokenSignatureInvalid):
@@ -213,8 +213,14 @@ func (a *ApiState) RefreshUser(w http.ResponseWriter, r *http.Request) {
         return
     }
     refreshedToken := generateRefreshToken(idstr)
+    tokenString, err := refreshedToken.SignedString(a.jwtSecret)
+    if err != nil {
+        log.Printf("failed to write token string")
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
     err = respondWithJSON(w, http.StatusOK, map[string]any{
-        "token": refreshedToken,
+        "token": tokenString,
     })
     if err != nil {
         w.WriteHeader(http.StatusInternalServerError)
