@@ -62,6 +62,8 @@ func main() {
 	mux.HandleFunc("POST /api/login", apiCfg.AuthenticateUser)
 
 	mux.HandleFunc("PUT /api/users", apiCfg.UpdateUser)
+    
+    mux.HandleFunc("POST /api/refresh", apiCfg.RefreshUser)
 
 	app := http.Server{
 		Addr:    ":8080",
