@@ -119,8 +119,12 @@ func (a *ApiState) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		log.Printf("token signature is invalid: %s", err)
 		w.WriteHeader(http.StatusUnauthorized)
 		return
+    case errors.Is(err, ErrIssuerInvalid):
+        log.Print("invalid token issuer; this may be a refresh token or it may have come from a different site.")
+        w.WriteHeader(http.StatusUnauthorized)
+        return
 	case err != nil:
-		log.Printf("something else entirely")
+        log.Printf("something else entirely: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -167,6 +171,11 @@ func (a *ApiState) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+var (
+    ErrMalformedAuthHeader = errors.New("malformed authorization header") 
+    ErrIssuerInvalid = errors.New("this is not a chirpy access token")
+)
+
 func generateAccessToken(id int) *jwt.Token {
 	exp := 1 * time.Hour
 	nowUTC := time.Now().UTC()
@@ -184,7 +193,7 @@ func generateAccessToken(id int) *jwt.Token {
 func (a *ApiState) validateAccessToken(authHeader string) (*jwt.Token, error) {
 	tokenString, split := strings.CutPrefix(authHeader, "Bearer ")
 	if !split {
-		return nil, errors.New("malformed authorization header")
+		return nil, ErrMalformedAuthHeader
 	}
 	token, err := jwt.Parse(
 		tokenString,
@@ -203,7 +212,7 @@ func (a *ApiState) validateAccessToken(authHeader string) (*jwt.Token, error) {
 		return nil, err
 	}
 	if i != "chirpy-access" {
-		return nil, errors.New("this is not a chirpy access token")
+		return nil, ErrIssuerInvalid
 	}
 	return token, nil
 }
