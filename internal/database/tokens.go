@@ -10,6 +10,20 @@ type RevokedToken struct {
 	RevokedAt time.Time
 }
 
+func (db *DB) Revoke(token string) (RevokedToken, error) {
+	revoked, err := db.GetRevokedTokens()
+	if err != nil {
+		return RevokedToken{}, err
+	}
+	toRevoke := RevokedToken{
+		Id:        token,
+		RevokedAt: time.Now(),
+	}
+	revoked = append(revoked, toRevoke)
+    db.writeDB("tokens", revoked)
+    return toRevoke, nil
+}
+
 func (db *DB) GetRevokedTokens() ([]RevokedToken, error) {
 	data, err := db.readDB()
 	if err != nil {
@@ -27,4 +41,3 @@ func (db *DB) GetRevokedTokens() ([]RevokedToken, error) {
 	}
 	return result.Tokens, nil
 }
-    
