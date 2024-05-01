@@ -8,8 +8,9 @@ import (
 )
 
 type Chirp struct {
-	Id   int    `json:"id"`
-	Body string `json:"body"`
+	Id       int    `json:"id"`
+	AuthorId int    `json:"author_id"`
+	Body     string `json:"body"`
 }
 
 func (db *DB) CreateChirp(chirp Chirp) (Chirp, error) {
