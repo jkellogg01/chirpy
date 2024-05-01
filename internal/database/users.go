@@ -11,12 +11,14 @@ var (
 )
 
 type User struct {
-	Id    int    `json:"id"`
-	Email string `json:"email"`
-	Pass  string `json:"password"`
+	Id          int    `json:"id"`
+	Email       string `json:"email"`
+	Pass        string `json:"password"`
+	IsChirpyRed bool   `json:"is_chirpy_red"`
 }
 
 func (db *DB) CreateUser(user User) (User, error) {
+    user.IsChirpyRed = true
 	users, err := db.getUsers()
 	if err != nil {
 		return User{}, err
@@ -57,43 +59,42 @@ func (db *DB) GetUserByEmail(email string) (User, error) {
 }
 
 func (db *DB) GetUser(id int) (User, error) {
-    users, err := db.getUsers()
-    if err != nil {
-        return User{}, err
-    }
-    if len(users) == 0 {
-        return User{}, ErrNotFound
-    }
-    for _, user := range users {
-        if user.Id == id {
-            return user, nil
-        }
-    }
-    return User{}, ErrNotFound
+	users, err := db.getUsers()
+	if err != nil {
+		return User{}, err
+	}
+	if len(users) == 0 {
+		return User{}, ErrNotFound
+	}
+	for _, user := range users {
+		if user.Id == id {
+			return user, nil
+		}
+	}
+	return User{}, ErrNotFound
 }
 
 func (db *DB) UpdateUser(newUser User) (User, error) {
-    if newUser.Email == "" || newUser.Pass == "" {
-        return User{}, errors.New("fill all fields to update user")
-    }
-    users, err := db.getUsers()
-    if err != nil {
-        return User{}, err
-    }
-    if len(users) == 0 {
-        return User{}, ErrNotFound
-    }
-    for i, user := range users {
-        if user.Id != newUser.Id {
-            continue
-        }
-        users[i] = newUser
-        err = db.writeDB("users", users)
-        return newUser, err
-    }
-    return User{}, ErrNotFound
+	if newUser.Email == "" || newUser.Pass == "" {
+		return User{}, errors.New("fill all fields to update user")
+	}
+	users, err := db.getUsers()
+	if err != nil {
+		return User{}, err
+	}
+	if len(users) == 0 {
+		return User{}, ErrNotFound
+	}
+	for i, user := range users {
+		if user.Id != newUser.Id {
+			continue
+		}
+		users[i] = newUser
+		err = db.writeDB("users", users)
+		return newUser, err
+	}
+	return User{}, ErrNotFound
 }
-
 
 func (db *DB) getUsers() ([]User, error) {
 	data, err := db.readDB()
