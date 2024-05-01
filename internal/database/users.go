@@ -96,6 +96,22 @@ func (db *DB) UpdateUser(newUser User) (User, error) {
 	return User{}, ErrNotFound
 }
 
+func (db *DB) UpgradeUser(id int) (User, error) {
+    users, err := db.getUsers()
+    if err != nil {
+        return User{}, err
+    }
+    for i, user := range users {
+        if user.Id != id {
+            continue
+        }
+        user.IsChirpyRed = true
+        users[i] = user
+        return user, db.writeDB("users", users)
+    }
+    return User{}, ErrNotFound
+}
+
 func (db *DB) getUsers() ([]User, error) {
 	data, err := db.readDB()
 	if err != nil {
