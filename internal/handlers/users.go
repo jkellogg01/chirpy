@@ -38,8 +38,9 @@ func (a *ApiConfig) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err = respondWithJSON(w, http.StatusCreated, map[string]any{
-		"id":    newUser.Id,
-		"email": newUser.Email,
+		"id":            newUser.Id,
+		"email":         newUser.Email,
+		"is_chirpy_red": newUser.IsChirpyRed,
 	})
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -50,8 +51,8 @@ func (a *ApiConfig) CreateUser(w http.ResponseWriter, r *http.Request) {
 func (a *ApiConfig) AuthenticateUser(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	var body struct {
-		Email  string `json:"email"`
-		Pass   string `json:"password"`
+		Email string `json:"email"`
+		Pass  string `json:"password"`
 	}
 	err := decoder.Decode(&body)
 	if err != nil {
@@ -78,25 +79,26 @@ func (a *ApiConfig) AuthenticateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	accessToken := generateAccessToken(user.Id)
-    refreshToken := generateRefreshToken(user.Id)
+	refreshToken := generateRefreshToken(user.Id)
 	accessTokenString, err := accessToken.SignedString(a.jwtSecret)
 	if err != nil {
 		log.Printf("Failed to sign jwt: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-    refreshTokenString, err := refreshToken.SignedString(a.jwtSecret)
-    if err != nil {
-        log.Printf("Failed to sign jwt (refresh): %s", err)
-        w.WriteHeader(http.StatusInternalServerError)
-        return
-    }
+	refreshTokenString, err := refreshToken.SignedString(a.jwtSecret)
+	if err != nil {
+		log.Printf("Failed to sign jwt (refresh): %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	log.Printf("responding with token string: %s", accessTokenString)
 	err = respondWithJSON(w, http.StatusOK, map[string]interface{}{
-		"id":    user.Id,
-		"email": user.Email,
-		"token": accessTokenString,
-        "refresh_token": refreshTokenString,
+		"id":            user.Id,
+		"email":         user.Email,
+        "is_chirpy_red": user.IsChirpyRed,
+		"token":         accessTokenString,
+		"refresh_token": refreshTokenString,
 	})
 	if err != nil {
 		w.WriteHeader(500)
@@ -112,19 +114,19 @@ func (a *ApiConfig) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	case errors.Is(err, jwt.ErrTokenMalformed):
-        log.Printf("token is malformed: %s", err)
+		log.Printf("token is malformed: %s", err)
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	case errors.Is(err, jwt.ErrTokenSignatureInvalid):
 		log.Printf("token signature is invalid: %s", err)
 		w.WriteHeader(http.StatusUnauthorized)
 		return
-    case errors.Is(err, ErrIssuerInvalid):
-        log.Print("invalid token issuer; this may be a refresh token or it may have come from a different site.")
-        w.WriteHeader(http.StatusUnauthorized)
-        return
+	case errors.Is(err, ErrIssuerInvalid):
+		log.Print("invalid token issuer; this may be a refresh token or it may have come from a different site.")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
 	case err != nil:
-        log.Printf("something else entirely: %s", err)
+		log.Printf("something else entirely: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -172,8 +174,8 @@ func (a *ApiConfig) UpdateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *ApiConfig) RefreshUser(w http.ResponseWriter, r *http.Request) {
-    authHeader := r.Header.Get("Authorization")
-    token, err := a.validateRefreshToken(authHeader)
+	authHeader := r.Header.Get("Authorization")
+	token, err := a.validateRefreshToken(authHeader)
 	switch {
 	case errors.Is(err, jwt.ErrTokenExpired) || errors.Is(err, jwt.ErrTokenNotValidYet):
 		log.Printf("timing is everything: %s", err)
@@ -187,49 +189,49 @@ func (a *ApiConfig) RefreshUser(w http.ResponseWriter, r *http.Request) {
 		log.Printf("token signature is invalid: %s", err)
 		w.WriteHeader(http.StatusUnauthorized)
 		return
-    case errors.Is(err, ErrIssuerInvalid):
-        log.Print("invalid token issuer")
-        w.WriteHeader(http.StatusUnauthorized)
-        return
-    case errors.Is(err, ErrTokenRevoked):
-        log.Print(err)
-        w.WriteHeader(http.StatusUnauthorized)
-        return
+	case errors.Is(err, ErrIssuerInvalid):
+		log.Print("invalid token issuer")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	case errors.Is(err, ErrTokenRevoked):
+		log.Print(err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
 	case err != nil:
-        log.Printf("something else entirely: %s", err)
+		log.Printf("something else entirely: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-    userID, err := token.Claims.GetSubject()
-    if err != nil {
-        log.Printf("failed to fetch jwt subject: %s", err)
-        w.WriteHeader(http.StatusInternalServerError)
-        return
-    }
-    idstr, err := strconv.Atoi(userID)
-    if err != nil {
-        log.Printf("failed to convert user id to int: %s", err)
-        w.WriteHeader(http.StatusInternalServerError)
-        return
-    }
-    newToken := generateAccessToken(idstr)
-    tokenString, err := newToken.SignedString(a.jwtSecret)
-    if err != nil {
-        log.Printf("failed to write token string")
-        w.WriteHeader(http.StatusInternalServerError)
-        return
-    }
-    err = respondWithJSON(w, http.StatusOK, map[string]any{
-        "token": tokenString,
-    })
-    if err != nil {
-        w.WriteHeader(http.StatusInternalServerError)
-    }
+	userID, err := token.Claims.GetSubject()
+	if err != nil {
+		log.Printf("failed to fetch jwt subject: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	idstr, err := strconv.Atoi(userID)
+	if err != nil {
+		log.Printf("failed to convert user id to int: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	newToken := generateAccessToken(idstr)
+	tokenString, err := newToken.SignedString(a.jwtSecret)
+	if err != nil {
+		log.Printf("failed to write token string")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	err = respondWithJSON(w, http.StatusOK, map[string]any{
+		"token": tokenString,
+	})
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
 }
 
 func (a *ApiConfig) RevokeToken(w http.ResponseWriter, r *http.Request) {
-    authHeader := r.Header.Get("Authorization")
-    _, err := a.validateRefreshToken(authHeader)
+	authHeader := r.Header.Get("Authorization")
+	_, err := a.validateRefreshToken(authHeader)
 	switch {
 	case errors.Is(err, jwt.ErrTokenExpired) || errors.Is(err, jwt.ErrTokenNotValidYet):
 		log.Printf("timing is everything: %s", err)
@@ -243,34 +245,34 @@ func (a *ApiConfig) RevokeToken(w http.ResponseWriter, r *http.Request) {
 		log.Printf("token signature is invalid: %s", err)
 		w.WriteHeader(http.StatusUnauthorized)
 		return
-    case errors.Is(err, ErrIssuerInvalid):
-        log.Print("invalid token issuer")
-        w.WriteHeader(http.StatusUnauthorized)
-        return
-    case errors.Is(err, ErrTokenRevoked):
-        log.Print(err)
-        w.WriteHeader(http.StatusUnauthorized)
-        return
+	case errors.Is(err, ErrIssuerInvalid):
+		log.Print("invalid token issuer")
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	case errors.Is(err, ErrTokenRevoked):
+		log.Print(err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
 	case err != nil:
-        log.Printf("something else entirely: %s", err)
+		log.Printf("something else entirely: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	tokenString, _ := strings.CutPrefix(authHeader, "Bearer ")
-    revoked, err := a.db.Revoke(tokenString)
-    if err != nil {
-        log.Printf("failed to revoke token: %s", err)
-        w.WriteHeader(http.StatusInternalServerError)
-        return
-    }
-    log.Printf("token revoked at %v", revoked.RevokedAt)
-    w.WriteHeader(http.StatusOK)
+	revoked, err := a.db.Revoke(tokenString)
+	if err != nil {
+		log.Printf("failed to revoke token: %s", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	log.Printf("token revoked at %v", revoked.RevokedAt)
+	w.WriteHeader(http.StatusOK)
 }
 
 var (
-    ErrMalformedAuthHeader = errors.New("malformed authorization header") 
-    ErrTokenRevoked = errors.New("this token has been revoked")
-    ErrIssuerInvalid = errors.New("this is not a chirpy access token")
+	ErrMalformedAuthHeader = errors.New("malformed authorization header")
+	ErrTokenRevoked        = errors.New("this token has been revoked")
+	ErrIssuerInvalid       = errors.New("this is not a chirpy access token")
 )
 
 func generateAccessToken(id int) *jwt.Token {
@@ -333,9 +335,9 @@ func (a *ApiConfig) validateRefreshToken(authHeader string) (*jwt.Token, error) 
 	if !split {
 		return nil, errors.New("malformed authorization header")
 	}
-    if r, _ := a.db.IsRevoked(tokenString); r {
-        return nil, ErrTokenRevoked
-    }
+	if r, _ := a.db.IsRevoked(tokenString); r {
+		return nil, ErrTokenRevoked
+	}
 	token, err := jwt.Parse(
 		tokenString,
 		func(token *jwt.Token) (interface{}, error) {

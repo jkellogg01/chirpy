@@ -18,7 +18,7 @@ type User struct {
 }
 
 func (db *DB) CreateUser(user User) (User, error) {
-    user.IsChirpyRed = true
+    user.IsChirpyRed = false
 	users, err := db.getUsers()
 	if err != nil {
 		return User{}, err

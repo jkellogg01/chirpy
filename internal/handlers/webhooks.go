@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+
+	"github.com/jkellogg01/chirpy/internal/database"
 )
 
-// I have a strong suspicion that I would want to implement eventData as an 
+// I have a strong suspicion that I would want to implement eventData as an
 // interface of some kind, but we'll jump off that bridge when we get there
 
 type PolkaUserEvent struct {
@@ -28,8 +30,11 @@ func (a *ApiConfig) DispatchPolkaEvent(w http.ResponseWriter, r *http.Request) {
 	switch event.Event {
 	case "user.upgraded":
 		err = a.handleUserUpgraded(event.Data.UserId)
-        if err != nil {
-            // this will need later to specify a not found error, ignoring that for now
+        if err == database.ErrNotFound {
+            log.Printf("user %d not found", event.Data.UserId)
+            w.WriteHeader(http.StatusNotFound)
+            return
+        } else if err != nil {
             log.Printf("failed to upgrade user: %s", err)
             w.WriteHeader(http.StatusInternalServerError)
             return
@@ -41,4 +46,9 @@ func (a *ApiConfig) DispatchPolkaEvent(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *ApiConfig) handleUserUpgraded(id int) error
+// this implementation is a bit thin, but i already wrote the dispatcher
+// around using it. I'm gonna leave it for now
+func (a *ApiConfig) handleUserUpgraded(id int) error {
+    _, err := a.db.UpgradeUser(id)
+    return err
+}

@@ -69,7 +69,7 @@ func main() {
 
     mux.HandleFunc("POST /api/revoke", apiCfg.RevokeToken)
 
-    mux.HandleFunc("POST /api/polka/webhooks", handlers.DispatchPolkaEvent)
+    mux.HandleFunc("POST /api/polka/webhooks", apiCfg.DispatchPolkaEvent)
 
 	app := http.Server{
 		Addr:    ":8080",
