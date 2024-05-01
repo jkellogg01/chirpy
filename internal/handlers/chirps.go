@@ -96,6 +96,7 @@ func (a *ApiState) CreateChirp(w http.ResponseWriter, r *http.Request) {
 	}
 	err = respondWithJSON(w, http.StatusCreated, map[string]interface{}{
 		"id":   newChirp.Id,
+        "author_id": newChirp.AuthorId,
 		"body": newChirp.Body,
 	})
 }

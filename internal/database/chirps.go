@@ -34,6 +34,7 @@ func (db *DB) CreateChirp(chirp Chirp) (Chirp, error) {
 }
 
 func (db *DB) GetChirp(id int) (Chirp, error) {
+	// TODO: make this use GetChirps under the hood
 	data, err := db.readDB()
 	if err != nil {
 		return Chirp{}, err
@@ -54,6 +55,28 @@ func (db *DB) GetChirp(id int) (Chirp, error) {
 		}
 	}
 	return Chirp{}, ErrNotFound
+}
+
+func (db *DB) DeleteChirp(id int) error {
+	chirps, err := db.GetChirps()
+	if err != nil {
+		return err
+	}
+	for i, chirp := range chirps {
+		if chirp.Id != id {
+			continue
+		}
+		switch i {
+		case 0:
+			chirps = chirps[1:]
+		case len(chirps) - 1:
+			chirps = chirps[:i]
+		default:
+			chirps = append(chirps[:i], chirps[i+1:]...)
+		}
+		break
+	}
+	return db.writeDB("chirps", chirps)
 }
 
 func (db *DB) GetChirps() ([]Chirp, error) {
