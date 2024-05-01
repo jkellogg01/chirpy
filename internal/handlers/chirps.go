@@ -31,6 +31,7 @@ func (a *ApiState) GetChirps(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 }
+
 func (a *ApiState) GetChirp(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("chirpID")
 	id, err := strconv.Atoi(idStr)
@@ -53,11 +54,26 @@ func (a *ApiState) GetChirp(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *ApiState) CreateChirp(w http.ResponseWriter, r *http.Request) {
+	authHeader := r.Header.Get("Authorization")
+	token, err := a.validateAccessToken(authHeader)
+	if err != nil {
+		log.Printf("failed to validate access token: %s", err)
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	authorIdStr, err := token.Claims.GetSubject()
+	if err != nil {
+		log.Printf("failed to get subject from token: %s", err)
+		log.Print("this should never happen with valid chirpy tokens...")
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	authorId, err := strconv.Atoi(authorIdStr)
 	bodyDecoder := json.NewDecoder(r.Body)
 	var body struct {
 		Body string
 	}
-	err := bodyDecoder.Decode(&body)
+	err = bodyDecoder.Decode(&body)
 	if err != nil {
 		log.Printf("Failed to decode request body: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -69,7 +85,10 @@ func (a *ApiState) CreateChirp(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	newChirp, err := a.db.CreateChirp(database.Chirp{Body: clean})
+	newChirp, err := a.db.CreateChirp(database.Chirp{
+		Body:     clean,
+		AuthorId: authorId,
+	})
 	if err != nil {
 		log.Printf("Failed to create chirp: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
