@@ -19,7 +19,7 @@ func main() {
 		os.Setenv("ENV", "DEV")
 	}
 
-	apiCfg, err := handlers.NewApiState(os.Getenv("JWT_SECRET"), "db.json")
+	apiCfg, err := handlers.NewApiConfig(os.Getenv("JWT_SECRET"), "db.json")
 	if err != nil {
 		log.Fatalf("failed to generate api state: %s", err)
 	}
@@ -56,6 +56,8 @@ func main() {
 	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.GetChirp)
 
 	mux.HandleFunc("POST /api/chirps", apiCfg.CreateChirp)
+
+    mux.HandleFunc("DELETE /api/chirps/{chirpID}", apiCfg.DeleteChirp)
 
 	mux.HandleFunc("POST /api/users", apiCfg.CreateUser)
 

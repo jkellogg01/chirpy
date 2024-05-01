@@ -8,12 +8,12 @@ import (
 	"github.com/jkellogg01/chirpy/internal/database"
 )
 
-type ApiState struct {
+type ApiConfig struct {
 	db        *database.DB
 	jwtSecret []byte
 }
 
-func NewApiState(secret, dbPath string) (*ApiState, error) {
+func NewApiConfig(secret, dbPath string) (*ApiConfig, error) {
 	jwtSecret, err := base64.StdEncoding.DecodeString(secret)
 	if err != nil {
 		return nil, err
@@ -22,13 +22,13 @@ func NewApiState(secret, dbPath string) (*ApiState, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ApiState{
+	return &ApiConfig{
 		db:        db,
 		jwtSecret: jwtSecret,
 	}, nil
 }
 
-func (a *ApiState) ClearDB() error {
+func (a *ApiConfig) ClearDB() error {
     return a.db.ClearDB()
 }
 

@@ -11,7 +11,7 @@ import (
 	"github.com/jkellogg01/chirpy/internal/database"
 )
 
-func (a *ApiState) GetChirps(w http.ResponseWriter, r *http.Request) {
+func (a *ApiConfig) GetChirps(w http.ResponseWriter, r *http.Request) {
 	chirps, err := a.db.GetChirps()
 	if errors.Is(err, database.ErrDBEmpty) || len(chirps) == 0 {
 		log.Printf("found no chirps")
@@ -32,7 +32,7 @@ func (a *ApiState) GetChirps(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *ApiState) GetChirp(w http.ResponseWriter, r *http.Request) {
+func (a *ApiConfig) GetChirp(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("chirpID")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
@@ -53,7 +53,7 @@ func (a *ApiState) GetChirp(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *ApiState) CreateChirp(w http.ResponseWriter, r *http.Request) {
+func (a *ApiConfig) CreateChirp(w http.ResponseWriter, r *http.Request) {
 	authHeader := r.Header.Get("Authorization")
 	token, err := a.validateAccessToken(authHeader)
 	if err != nil {
@@ -99,6 +99,69 @@ func (a *ApiState) CreateChirp(w http.ResponseWriter, r *http.Request) {
         "author_id": newChirp.AuthorId,
 		"body": newChirp.Body,
 	})
+}
+
+func (a *ApiConfig) DeleteChirp(w http.ResponseWriter, r *http.Request) {
+    authHeader := r.Header.Get("authorization")
+    token, err := a.validateAccessToken(authHeader)
+    if err != nil {
+        log.Printf("access token failed: %s", err)
+        w.WriteHeader(http.StatusForbidden)
+        return
+    }
+    userIdStr, err := token.Claims.GetSubject()
+    if err != nil {
+        log.Printf("couldn't get user id from token claims: %s", err)
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
+    userId, err := strconv.Atoi(userIdStr)
+    if err != nil {
+        log.Printf("couldn't convert user id to integer: %s", err)
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
+    chirpIdStr := r.PathValue("chirpID")
+    if chirpIdStr == "" {
+        log.Print("no chirp id provided")
+        w.WriteHeader(http.StatusBadRequest)
+        return
+    }
+    chirpId, err := strconv.Atoi(chirpIdStr)
+    if err != nil {
+        log.Printf("couldn't convert chirp id to integer: %s", err)
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
+    chirp, err := a.db.GetChirp(chirpId)
+    switch {
+    case err == nil:
+        // as you were
+    case errors.Is(err, database.ErrDBEmpty):
+        log.Print("nice try cowboy, no chirps here")
+        w.WriteHeader(http.StatusTeapot)
+        return
+    case errors.Is(err, database.ErrNotFound):
+        log.Printf("you missed: %s", err)
+        w.WriteHeader(http.StatusNotFound)
+        return
+    default:
+        log.Printf("hard to say: %s", err)
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
+    if chirp.AuthorId != userId {
+        log.Printf("user %d not authorized to delete this chirp by user %d", userId, chirp.AuthorId)
+        w.WriteHeader(http.StatusForbidden)
+        return
+    }
+    err = a.db.DeleteChirp(chirpId)
+    if err != nil {
+        log.Printf("failed to delete chirp: %s", err)
+        w.WriteHeader(http.StatusInternalServerError)
+        return
+    }
+    w.WriteHeader(http.StatusOK)
 }
 
 func validateChirp(body string) (string, error) {

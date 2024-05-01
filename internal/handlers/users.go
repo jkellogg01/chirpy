@@ -15,7 +15,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func (a *ApiState) CreateUser(w http.ResponseWriter, r *http.Request) {
+func (a *ApiConfig) CreateUser(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	var body database.User
 	err := decoder.Decode(&body)
@@ -47,7 +47,7 @@ func (a *ApiState) CreateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 // api/login
-func (a *ApiState) AuthenticateUser(w http.ResponseWriter, r *http.Request) {
+func (a *ApiConfig) AuthenticateUser(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	var body struct {
 		Email  string `json:"email"`
@@ -103,7 +103,7 @@ func (a *ApiState) AuthenticateUser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *ApiState) UpdateUser(w http.ResponseWriter, r *http.Request) {
+func (a *ApiConfig) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	authHeader := r.Header.Get("Authorization")
 	token, err := a.validateAccessToken(authHeader)
 	switch {
@@ -171,7 +171,7 @@ func (a *ApiState) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *ApiState) RefreshUser(w http.ResponseWriter, r *http.Request) {
+func (a *ApiConfig) RefreshUser(w http.ResponseWriter, r *http.Request) {
     authHeader := r.Header.Get("Authorization")
     token, err := a.validateRefreshToken(authHeader)
 	switch {
@@ -227,7 +227,7 @@ func (a *ApiState) RefreshUser(w http.ResponseWriter, r *http.Request) {
     }
 }
 
-func (a *ApiState) RevokeToken(w http.ResponseWriter, r *http.Request) {
+func (a *ApiConfig) RevokeToken(w http.ResponseWriter, r *http.Request) {
     authHeader := r.Header.Get("Authorization")
     _, err := a.validateRefreshToken(authHeader)
 	switch {
@@ -287,7 +287,7 @@ func generateAccessToken(id int) *jwt.Token {
 	return token
 }
 
-func (a *ApiState) validateAccessToken(authHeader string) (*jwt.Token, error) {
+func (a *ApiConfig) validateAccessToken(authHeader string) (*jwt.Token, error) {
 	tokenString, split := strings.CutPrefix(authHeader, "Bearer ")
 	if !split {
 		return nil, ErrMalformedAuthHeader
@@ -328,7 +328,7 @@ func generateRefreshToken(id int) *jwt.Token {
 	return token
 }
 
-func (a *ApiState) validateRefreshToken(authHeader string) (*jwt.Token, error) {
+func (a *ApiConfig) validateRefreshToken(authHeader string) (*jwt.Token, error) {
 	tokenString, split := strings.CutPrefix(authHeader, "Bearer ")
 	if !split {
 		return nil, errors.New("malformed authorization header")
