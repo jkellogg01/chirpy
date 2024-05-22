@@ -80,13 +80,13 @@ func (a *ApiConfig) AuthenticateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	accessToken := generateAccessToken(user.Id)
 	refreshToken := generateRefreshToken(user.Id)
-	accessTokenString, err := accessToken.SignedString(a.jwtSecret)
+	accessTokenString, err := accessToken.SignedString(a.keys["jwt-secret"])
 	if err != nil {
 		log.Printf("Failed to sign jwt: %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	refreshTokenString, err := refreshToken.SignedString(a.jwtSecret)
+	refreshTokenString, err := refreshToken.SignedString(a.keys["jwt-secret"])
 	if err != nil {
 		log.Printf("Failed to sign jwt (refresh): %s", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -215,7 +215,7 @@ func (a *ApiConfig) RefreshUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	newToken := generateAccessToken(idstr)
-	tokenString, err := newToken.SignedString(a.jwtSecret)
+	tokenString, err := newToken.SignedString(a.keys["jwt-secret"])
 	if err != nil {
 		log.Printf("failed to write token string")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -300,7 +300,7 @@ func (a *ApiConfig) validateAccessToken(authHeader string) (*jwt.Token, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 			}
-			return a.jwtSecret, nil
+			return a.keys["jwt-secret"], nil
 		},
 	)
 	if err != nil {
@@ -344,7 +344,7 @@ func (a *ApiConfig) validateRefreshToken(authHeader string) (*jwt.Token, error) 
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 			}
-			return a.jwtSecret, nil
+			return a.keys["jwt-secret"], nil
 		},
 	)
 	if err != nil {

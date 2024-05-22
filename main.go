@@ -13,13 +13,20 @@ import (
 
 func main() {
 	godotenv.Load()
-	devMode := flag.Bool("dev", false, "clear the database on startup")
+    devMode := flag.Bool("dev", false, "dev mode: clear the database on startup")
 	flag.Parse()
 	if *devMode {
 		os.Setenv("ENV", "DEV")
 	}
 
-	apiCfg, err := handlers.NewApiConfig(os.Getenv("JWT_SECRET"), "db.json")
+    jwtSecret := os.Getenv("JWT_SECRET")
+    if jwtSecret == "" {
+        log.Fatal("make sure you specify a JWT secret in .env!")
+    }
+	apiCfg, err := handlers.NewApiConfig("db.json", map[string]string{
+        "jwt-secret": jwtSecret,
+        "polka-key": os.Getenv("POLKA_KEY"),
+    })
 	if err != nil {
 		log.Fatalf("failed to generate api state: %s", err)
 	}
