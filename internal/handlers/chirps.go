@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -12,8 +13,8 @@ import (
 )
 
 func (a *ApiConfig) GetChirps(w http.ResponseWriter, r *http.Request) {
-	chirps, err := a.db.GetChirps()
-	if errors.Is(err, database.ErrDBEmpty) || len(chirps) == 0 {
+	chirpsRaw, err := a.db.GetChirps()
+	if errors.Is(err, database.ErrDBEmpty) || len(chirpsRaw) == 0 {
 		log.Printf("found no chirps")
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -24,28 +25,30 @@ func (a *ApiConfig) GetChirps(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	author := r.URL.Query().Get("author_id")
-	if author == "" {
-		err = respondWithJSON(w, http.StatusOK, map[string]interface{}{
-			"chirps": chirps,
-		})
-		if err != nil {
-			log.Printf("failed to respond: %s", err)
-			w.WriteHeader(http.StatusInternalServerError)
-		}
-	}
-	authorId, err := strconv.Atoi(author)
-	if err != nil {
-		log.Printf("failed to convert author id to int: %s", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
 	authorChirps := make([]database.Chirp, 0)
-	for _, chirp := range chirps {
-		if chirp.AuthorId != authorId {
-			continue
+	if author == "" {
+		authorChirps = chirpsRaw
+	} else {
+		authorId, err := strconv.Atoi(author)
+		if err != nil {
+			log.Printf("failed to convert author id to int: %s", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
-		authorChirps = append(authorChirps, chirp)
+		for _, chirp := range chirpsRaw {
+			if chirp.AuthorId != authorId {
+				continue
+			}
+			authorChirps = append(authorChirps, chirp)
+		}
 	}
+    slices.SortFunc(authorChirps, func(a, b database.Chirp) int {
+        return a.Id - b.Id
+    })
+    order := r.URL.Query().Get("sort")
+    if order == "desc" {
+        slices.Reverse(authorChirps)
+    }
 	err = respondWithJSON(w, http.StatusOK, map[string]interface{}{
 		"chirps": authorChirps,
 	})
